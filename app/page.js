@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { knowledgeBase } from "../data/knowledgeBase";
 
 export default function Home() {
   const [messages, setMessages] = useState([
     {
       sender: "bot",
-      text: "Witaj! Jestem AI Agentem Administracji Publicznej. Zadaj pytanie dotyczące kontaktu, godzin pracy, dokumentów albo operatora.",
+      text: "Witaj! Jestem AI Agentem Administracji Publicznej. Możesz zapytać mnie o kontakt, godziny pracy, dokumenty, formularze albo poprosić o operatora.",
     },
   ]);
 
@@ -32,6 +33,11 @@ export default function Home() {
       return;
     }
 
+    if (/^[^a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ0-9]+$/.test(text)) {
+      addBotMessage("Nie rozumiem pytania. Spróbuj napisać je pełnym zdaniem.");
+      return;
+    }
+
     const response = generateBotResponse(text);
 
     setMessages((prev) => [
@@ -52,31 +58,44 @@ export default function Home() {
   function generateBotResponse(text) {
     const lowerText = text.toLowerCase();
 
-    if (lowerText.includes("kontakt")) {
-      return "Dane kontaktowe znajdziesz w sekcji Kontakt. Możesz też wypełnić formularz na dole strony.";
-    }
-
-    if (lowerText.includes("godziny")) {
-      return "Urząd pracuje od poniedziałku do piątku. Dokładne godziny należy potwierdzić na oficjalnej stronie urzędu.";
-    }
-
-    if (lowerText.includes("dokument") || lowerText.includes("wniosek")) {
-      return "W sprawie dokumentów przygotuj dowód osobisty oraz wymagany formularz. Szczegóły znajdują się w oficjalnym źródle urzędu.";
-    }
-
     if (
-      lowerText.includes("operator") ||
-      lowerText.includes("człowiek") ||
-      lowerText.includes("pomoc")
+      lowerText.includes("pogoda") ||
+      lowerText.includes("film") ||
+      lowerText.includes("sport") ||
+      lowerText.includes("muzyka")
     ) {
-      return "Przekierowuję do operatora. W rzeczywistym systemie rozmowa zostałaby przekazana pracownikowi urzędu.";
+      return "To pytanie jest poza zakresem agenta administracji publicznej. Mogę pomóc w sprawach kontaktu, godzin pracy, dokumentów, formularzy lub przekierować do operatora.";
     }
 
-    if (lowerText.includes("pogoda") || lowerText.includes("film")) {
-      return "To pytanie jest poza zakresem agenta administracji publicznej. Mogę pomóc w sprawach kontaktu, godzin pracy, dokumentów i formularzy.";
+    const result = searchKnowledgeBase(lowerText);
+
+    if (result) {
+      return result.answer;
     }
 
-    return "Nie mogę potwierdzić tej informacji na podstawie dostępnych źródeł. Mogę przekierować Cię do operatora — wpisz operator.";
+    return "Nie mogę potwierdzić tej informacji na podstawie dostępnych danych. Mogę przekierować Cię do operatora — wpisz „operator”.";
+  }
+
+  function searchKnowledgeBase(question) {
+    let bestMatch = null;
+    let bestScore = 0;
+
+    knowledgeBase.forEach((item) => {
+      let score = 0;
+
+      item.keywords.forEach((keyword) => {
+        if (question.includes(keyword.toLowerCase())) {
+          score++;
+        }
+      });
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = item;
+      }
+    });
+
+    return bestMatch;
   }
 
   function startVoiceInput() {
@@ -97,7 +116,6 @@ export default function Home() {
     recognition.interimResults = false;
 
     setIsListening(true);
-
     recognition.start();
 
     recognition.onresult = function (event) {
@@ -137,10 +155,19 @@ export default function Home() {
     }
   }
 
+  function clearChat() {
+    setMessages([
+      {
+        sender: "bot",
+        text: "Historia rozmowy została wyczyszczona. Jak mogę pomóc?",
+      },
+    ]);
+  }
+
   function handleFormSubmit(event) {
     event.preventDefault();
 
-    if (!form.name || !form.email || !form.message) {
+    if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
       alert("Wypełnij wszystkie pola formularza.");
       return;
     }
@@ -157,17 +184,26 @@ export default function Home() {
   return (
     <main>
       <header className="header">
-        <p className="badge">Scenariusz 2 — Responsywna strona WWW</p>
+        <p className="badge">Zadanie 1</p>
         <h1>AI Agent Administracji Publicznej</h1>
         <p>
-          Responsywna aplikacja webowa z chatbotem, FAQ, formularzem
-          kontaktowym i obsługą głosową.
+          Responsywna aplikacja webowa z chatbotem, bazą wiedzy, FAQ,
+          formularzem kontaktowym i obsługą głosową.
         </p>
       </header>
 
       <section className="container">
         <section className="chatCard">
-          <h2>Czat z agentem</h2>
+          <div className="chatTitle">
+            <div>
+              <h2>Czat z agentem</h2>
+              <p>Zapytaj o sprawy urzędowe lub poproś o operatora.</p>
+            </div>
+
+            <button className="secondaryButton" onClick={clearChat}>
+              Wyczyść
+            </button>
+          </div>
 
           <div className="messages">
             {messages.map((message, index) => (
@@ -205,7 +241,7 @@ export default function Home() {
             </button>
 
             <button onClick={() => speakText(messages[messages.length - 1].text)}>
-              🔊 Czytaj ostatnią odpowiedź
+              🔊 Czytaj ostatnią
             </button>
 
             <button onClick={stopSpeaking}>🛑 Stop</button>
@@ -219,8 +255,8 @@ export default function Home() {
             <details>
               <summary>Jak działa chatbot?</summary>
               <p>
-                Bot analizuje wpisany tekst i odpowiada na podstawie prostych
-                reguł oraz przygotowanej bazy wiedzy.
+                Bot analizuje pytanie i wyszukuje odpowiedź w przygotowanej
+                bazie wiedzy.
               </p>
             </details>
 
@@ -237,6 +273,14 @@ export default function Home() {
               <p>
                 Tak. Użytkownik może dyktować pytania, a bot może odczytywać
                 odpowiedzi głosowo.
+              </p>
+            </details>
+
+            <details>
+              <summary>Jakie pytania można zadawać?</summary>
+              <p>
+                Możesz pytać o kontakt, godziny pracy, dokumenty, formularze i
+                operatora.
               </p>
             </details>
           </section>

@@ -260,3 +260,53 @@ form {
     flex-direction: column;
   }
 }
+
+.chatTitle {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.chatTitle h2 {
+  margin-bottom: 6px;
+}
+
+.chatTitle p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.secondaryButton {
+  background: #64748b;
+}
+
+.secondaryButton:hover {
+  background: #475569;
+}
+
+.voiceArea {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.voiceArea button {
+  flex: 1;
+}
+
+@media (max-width: 768px) {
+  .chatTitle {
+    flex-direction: column;
+  }
+
+  .secondaryButton {
+    width: 100%;
+  }
+
+  .voiceArea {
+    flex-direction: column;
+  }
+}

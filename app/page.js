@@ -1,16 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { knowledgeBase } from "../data/knowledgeBase";
 
 export default function Home() {
-  const [messages, setMessages] = useState([
-    {
-      sender: "bot",
-      text: "Witaj! Jestem AI Agentem Administracji Publicznej. Możesz zapytać mnie o kontakt, godziny pracy, dokumenty, formularze albo poprosić o operatora.",
-    },
-  ]);
+  const welcomeMessage = {
+    sender: "bot",
+    text: "Witaj! Jestem AI Agentem Administracji Publicznej. Możesz zapytać mnie o kontakt, godziny pracy, dokumenty, formularze albo poprosić o operatora.",
+  };
 
+  const [messages, setMessages] = useState([welcomeMessage]);
   const [input, setInput] = useState("");
   const [isListening, setIsListening] = useState(false);
 
@@ -20,61 +19,20 @@ export default function Home() {
     message: "",
   });
 
-  function sendMessage(customText = null) {
-    const text = customText ? customText.trim() : input.trim();
+  useEffect(() => {
+    const savedMessages = localStorage.getItem("govChatHistory");
 
-    if (text === "") {
-      addBotMessage("Wpisz pytanie przed wysłaniem.");
-      return;
+    if (savedMessages) {
+      setMessages(JSON.parse(savedMessages));
     }
+  }, []);
 
-    if (text.length < 3) {
-      addBotMessage("Pytanie jest za krótkie. Wpisz minimum 3 znaki.");
-      return;
-    }
-
-    if (/^[^a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ0-9]+$/.test(text)) {
-      addBotMessage("Nie rozumiem pytania. Spróbuj napisać je pełnym zdaniem.");
-      return;
-    }
-
-    const response = generateBotResponse(text);
-
-    setMessages((prev) => [
-      ...prev,
-      { sender: "user", text },
-      { sender: "bot", text: response },
-    ]);
-
-    setInput("");
-    speakText(response);
-  }
-
-  function addBotMessage(text) {
-    setMessages((prev) => [...prev, { sender: "bot", text }]);
-    speakText(text);
-  }
-
-  function generateBotResponse(text) {
-    const lowerText = text.toLowerCase();
-
-    if (
-      lowerText.includes("pogoda") ||
-      lowerText.includes("film") ||
-      lowerText.includes("sport") ||
-      lowerText.includes("muzyka")
-    ) {
-      return "To pytanie jest poza zakresem agenta administracji publicznej. Mogę pomóc w sprawach kontaktu, godzin pracy, dokumentów, formularzy lub przekierować do operatora.";
-    }
-
-    const result = searchKnowledgeBase(lowerText);
-
-    if (result) {
-      return result.answer;
-    }
-
-    return "Nie mogę potwierdzić tej informacji na podstawie dostępnych danych. Mogę przekierować Cię do operatora — wpisz „operator”.";
-  }
+  useEffect(() => {
+    localStorage.setItem(
+      "govChatHistory",
+      JSON.stringify(messages)
+    );
+  }, [messages]);
 
   function searchKnowledgeBase(question) {
     let bestMatch = null;
@@ -98,13 +56,80 @@ export default function Home() {
     return bestMatch;
   }
 
+  function generateBotResponse(text) {
+    const lowerText = text.toLowerCase();
+
+    if (
+      lowerText.includes("pogoda") ||
+      lowerText.includes("film") ||
+      lowerText.includes("muzyka") ||
+      lowerText.includes("sport")
+    ) {
+      return "To pytanie jest poza zakresem agenta administracji publicznej.";
+    }
+
+    const result = searchKnowledgeBase(lowerText);
+
+    if (result) {
+      return result.answer;
+    }
+
+    return "Nie mogę potwierdzić tej informacji. Mogę przekierować Cię do operatora.";
+  }
+
+  function sendMessage(customText = null) {
+    const text = customText
+      ? customText.trim()
+      : input.trim();
+
+    if (text === "") {
+      addBotMessage("Wpisz pytanie przed wysłaniem.");
+      return;
+    }
+
+    if (text.length < 3) {
+      addBotMessage(
+        "Pytanie jest za krótkie. Wpisz minimum 3 znaki."
+      );
+      return;
+    }
+
+    const response = generateBotResponse(text);
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        sender: "user",
+        text,
+      },
+      {
+        sender: "bot",
+        text: response,
+      },
+    ]);
+
+    setInput("");
+    speakText(response);
+  }
+
+  function addBotMessage(text) {
+    setMessages((prev) => [
+      ...prev,
+      {
+        sender: "bot",
+        text,
+      },
+    ]);
+  }
+
   function startVoiceInput() {
     const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       addBotMessage(
-        "Twoja przeglądarka nie obsługuje rozpoznawania mowy. Użyj Chrome lub Edge."
+        "Twoja przeglądarka nie obsługuje rozpoznawania mowy."
       );
       return;
     }
@@ -116,46 +141,46 @@ export default function Home() {
     recognition.interimResults = false;
 
     setIsListening(true);
+
     recognition.start();
 
-    recognition.onresult = function (event) {
-      const transcript = event.results[0][0].transcript;
+    recognition.onresult = (event) => {
+      const transcript =
+        event.results[0][0].transcript;
+
       setInput(transcript);
       sendMessage(transcript);
     };
 
-    recognition.onerror = function () {
-      addBotMessage("Nie udało się rozpoznać mowy. Spróbuj ponownie.");
+    recognition.onend = () => {
       setIsListening(false);
     };
 
-    recognition.onend = function () {
+    recognition.onerror = () => {
       setIsListening(false);
     };
   }
 
   function speakText(text) {
-    if (!window.speechSynthesis) {
-      return;
-    }
+    if (!window.speechSynthesis) return;
 
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance =
+      new SpeechSynthesisUtterance(text);
+
     utterance.lang = "pl-PL";
-    utterance.rate = 1;
-    utterance.pitch = 1;
 
     window.speechSynthesis.speak(utterance);
   }
 
   function stopSpeaking() {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    window.speechSynthesis.cancel();
   }
 
   function clearChat() {
+    localStorage.removeItem("govChatHistory");
+
     setMessages([
       {
         sender: "bot",
@@ -167,12 +192,16 @@ export default function Home() {
   function handleFormSubmit(event) {
     event.preventDefault();
 
-    if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
-      alert("Wypełnij wszystkie pola formularza.");
+    if (
+      !form.name ||
+      !form.email ||
+      !form.message
+    ) {
+      alert("Wypełnij wszystkie pola.");
       return;
     }
 
-    alert("Formularz został wysłany symulacyjnie.");
+    alert("Formularz został wysłany.");
 
     setForm({
       name: "",
@@ -184,11 +213,15 @@ export default function Home() {
   return (
     <main>
       <header className="header">
-        <p className="badge">Zadanie 1</p>
+        <p className="badge">
+          Zadanie 1
+        </p>
+
         <h1>AI Agent Administracji Publicznej</h1>
+
         <p>
-          Responsywna aplikacja webowa z chatbotem, bazą wiedzy, FAQ,
-          formularzem kontaktowym i obsługą głosową.
+          Chatbot oparty o bazę wiedzy, obsługę
+          głosową oraz historię rozmów.
         </p>
       </header>
 
@@ -197,10 +230,16 @@ export default function Home() {
           <div className="chatTitle">
             <div>
               <h2>Czat z agentem</h2>
-              <p>Zapytaj o sprawy urzędowe lub poproś o operatora.</p>
+              <p>
+                Zadaj pytanie dotyczące spraw
+                urzędowych.
+              </p>
             </div>
 
-            <button className="secondaryButton" onClick={clearChat}>
+            <button
+              className="secondaryButton"
+              onClick={clearChat}
+            >
               Wyczyść
             </button>
           </div>
@@ -210,10 +249,16 @@ export default function Home() {
               <div
                 key={index}
                 className={
-                  message.sender === "user" ? "userMessage" : "botMessage"
+                  message.sender === "user"
+                    ? "userMessage"
+                    : "botMessage"
                 }
               >
-                <strong>{message.sender === "user" ? "Ty:" : "Bot:"}</strong>{" "}
+                <strong>
+                  {message.sender === "user"
+                    ? "Ty:"
+                    : "Bot:"}
+                </strong>{" "}
                 {message.text}
               </div>
             ))}
@@ -224,27 +269,41 @@ export default function Home() {
               type="text"
               placeholder="Zadaj pytanie..."
               value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
+              onChange={(e) =>
+                setInput(e.target.value)
+              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
                   sendMessage();
                 }
               }}
             />
 
-            <button onClick={() => sendMessage()}>Wyślij</button>
+            <button onClick={() => sendMessage()}>
+              Wyślij
+            </button>
           </div>
 
           <div className="voiceArea">
             <button onClick={startVoiceInput}>
-              {isListening ? "🎙 Słucham..." : "🎙 Mów"}
+              {isListening
+                ? "🎙 Słucham..."
+                : "🎙 Mów"}
             </button>
 
-            <button onClick={() => speakText(messages[messages.length - 1].text)}>
-              🔊 Czytaj ostatnią
+            <button
+              onClick={() =>
+                speakText(
+                  messages[messages.length - 1].text
+                )
+              }
+            >
+              🔊 Czytaj
             </button>
 
-            <button onClick={stopSpeaking}>🛑 Stop</button>
+            <button onClick={stopSpeaking}>
+              🛑 Stop
+            </button>
           </div>
         </section>
 
@@ -255,32 +314,16 @@ export default function Home() {
             <details>
               <summary>Jak działa chatbot?</summary>
               <p>
-                Bot analizuje pytanie i wyszukuje odpowiedź w przygotowanej
-                bazie wiedzy.
+                Bot wyszukuje odpowiedzi w
+                lokalnej bazie wiedzy.
               </p>
             </details>
 
             <details>
-              <summary>Co zrobić, gdy bot nie zna odpowiedzi?</summary>
+              <summary>Czy obsługuje głos?</summary>
               <p>
-                Bot informuje, że nie może potwierdzić informacji i proponuje
-                kontakt z operatorem.
-              </p>
-            </details>
-
-            <details>
-              <summary>Czy strona obsługuje głos?</summary>
-              <p>
-                Tak. Użytkownik może dyktować pytania, a bot może odczytywać
-                odpowiedzi głosowo.
-              </p>
-            </details>
-
-            <details>
-              <summary>Jakie pytania można zadawać?</summary>
-              <p>
-                Możesz pytać o kontakt, godziny pracy, dokumenty, formularze i
-                operatora.
+                Tak. Obsługuje mowę oraz
+                odczytywanie odpowiedzi.
               </p>
             </details>
           </section>
@@ -293,33 +336,41 @@ export default function Home() {
                 type="text"
                 placeholder="Imię i nazwisko"
                 value={form.name}
-                onChange={(event) =>
-                  setForm({ ...form, name: event.target.value })
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    name: e.target.value,
+                  })
                 }
-                required
               />
 
               <input
                 type="email"
                 placeholder="Adres e-mail"
                 value={form.email}
-                onChange={(event) =>
-                  setForm({ ...form, email: event.target.value })
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    email: e.target.value,
+                  })
                 }
-                required
               />
 
               <textarea
-                placeholder="Wiadomość"
                 rows="5"
+                placeholder="Wiadomość"
                 value={form.message}
-                onChange={(event) =>
-                  setForm({ ...form, message: event.target.value })
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    message: e.target.value,
+                  })
                 }
-                required
               />
 
-              <button type="submit">Wyślij formularz</button>
+              <button type="submit">
+                Wyślij formularz
+              </button>
             </form>
           </section>
         </aside>
